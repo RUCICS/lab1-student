@@ -1,0 +1,18 @@
+name: "Server exits cleanly when last pane's shell exits"
+id: t_last_pane_exit
+category: session
+timeout_sec: 15
+skip_tmux: true
+terminal:
+  rows: 24
+  cols: 80
+steps:
+  - action: start
+  - action: wait
+    duration_ms: 500
+  - action: run_command
+    command: "exit"
+  - action: wait
+    duration_ms: 2000
+  - action: verify_client_exited
+  - action: verify_server_dead
