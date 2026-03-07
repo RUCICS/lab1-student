@@ -1,0 +1,22 @@
+name: "Two pane winsize reflects layout split"
+id: t_layout_winsize
+category: layout
+timeout_sec: 20
+skip_tmux: true
+terminal:
+  rows: 24
+  cols: 80
+steps:
+  - action: start
+  - action: create_pane_with_probe
+  - action: create_pane_with_probe
+  - action: wait_probe_ready
+    pane: 0
+  - action: wait_probe_ready
+    pane: 1
+  - action: wait
+    duration_ms: 500
+  - action: verify_layout_winsize
+    panes: [0, 1]
+    total_rows: 24
+    cols: 80

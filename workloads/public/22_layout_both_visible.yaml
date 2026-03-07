@@ -1,0 +1,20 @@
+name: "Two panes both visible in client output"
+id: t_layout_both_visible
+category: layout
+timeout_sec: 20
+skip_tmux: true
+terminal:
+  rows: 24
+  cols: 80
+steps:
+  - action: start
+  - action: create_pane_with_probe
+  - action: create_pane_with_probe
+  - action: wait_probe_ready
+    pane: 0
+  - action: wait_probe_ready
+    pane: 1
+  - action: wait
+    duration_ms: 1000
+  - action: verify_all_panes_visible
+    panes: [0, 1]
