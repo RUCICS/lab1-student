@@ -518,6 +518,29 @@ make grade      # 通过 Docker 运行公开测试用例并评分
 
 通过 GitHub Classroom 提交。将你的代码推送到分配的仓库即可。确保 `make` 能在干净的 Linux 环境中编译成功。
 
+### 4.6 AI 对话记录
+
+你的仓库中必须包含一个 `ai-logs/` 目录，存放你在开发过程中与 AI 的完整对话记录。这是提交的必要组成部分，缺失将影响成绩。
+
+**为什么要交这个**：我们鼓励使用 AI，但需要看到真实的协作过程。对话记录是 Presentation 的重要素材，也是验证学术诚信的依据。
+
+**格式要求**：Markdown 或 JSON，能看到你的提问和 AI 的回答即可。文件名建议带日期或序号，比如 `01-pty-setup.md`、`02-signal-handling.md`，方便你自己回顾。
+
+**各工具的导出方法**：
+
+| 工具 | 导出方式 |
+|------|---------|
+| Claude Code | 运行 `/export` 命令，或直接复制 `~/.claude/projects/` 下的 `.jsonl` 文件 |
+| Cursor | 官方导出：File > Export Chat，或使用 [cursor-chat-export](https://github.com/somogyijanos/cursor-chat-export) 批量导出 |
+| GitHub Copilot | VS Code 中 `Ctrl+Shift+P` > `Chat: Export Chat...` 导出 JSON |
+| ChatGPT / Claude 网页版 | 手动复制对话，或在设置中导出数据 |
+| 其他工具 | 截图或手动复制均可，关键是保留完整上下文 |
+
+**注意事项**：
+- 请在开发过程中持续导出，不要等到最后。部分工具的对话记录会在 30 天后自动删除
+- 不需要美化或整理，原始记录比精心编排的版本更有价值
+- 如果你使用了多个 AI 工具，每个工具的记录都要包含
+
 ## 5 Presentation
 
 这个实验的 Presentation 核心不是 mini-tmux 本身，而是你在整个过程中如何学习、如何与 AI 协作。请在做实验的过程中有意识地记录以下内容，具体形式和要求我们后续通知。
