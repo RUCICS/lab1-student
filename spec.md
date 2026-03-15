@@ -78,6 +78,7 @@ make clean      # 清理编译产物
 - `man 2 setpgid`：设置进程组
 - `man 2 tcsetpgrp` / `man 3 tcsetpgrp`：设置前台进程组
 - APUE 第 9 章：Process Relationships
+- 蒋炎岩（南京大学）"终端、进程组和 UNIX Shell"：https://www.bilibili.com/video/BV1bNQAYZEpu/ ，这节课覆盖了终端设备、PTY、进程组、Session、前台/后台进程组等概念，和 mini-tmux 高度相关，推荐完整观看
 
 ### 2.3 信号语义
 
