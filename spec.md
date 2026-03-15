@@ -247,6 +247,10 @@ ls -la /tmp/tmux-$(id -u)/
 
 你会看到一个 socket 文件。Server 和 Client 就是通过这个 Unix domain socket 通信的。你的 mini-tmux 也要这样做。
 
+当你在你的 Ubuntu Desktop 上打开两个 Gnome Terminal 并同时在两个 terminal 中运行 tmux 时，会发生下图中的事情：
+
+![tmux 的 C/S 架构](.img/tmux%20的%20CS%20架构.png)
+
 你需要自己设计 Server 与 Client 之间的通信协议，这是一个重要的设计决策：Server 是直接转发各 PTY 的原始字节流让 Client 自己渲染，还是在 Server 端完成渲染后推送结构化的屏幕数据？两种方案各有优劣，请自行权衡。
 
 Server 的核心是一个事件循环（Event Loop），使用 `poll()` 或 `epoll` 同时监听所有需要关注的 fd（监听 socket、Client socket、PTY master 等），在任意 fd 就绪时进行处理。
