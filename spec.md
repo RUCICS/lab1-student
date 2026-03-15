@@ -51,7 +51,19 @@ make clean      # 清理编译产物
 
 伪终端（Pseudo-terminal, PTY）是一对互相连通的字符设备，一端叫 master，一端叫 slave，程序写入 master 的数据会从 slave 读出，反之亦然，模拟了一个"真实终端"的行为。
 
+![神奇的 pty：就像传送门一样](.img/神奇的%20pty：就像传送门一样.png)
+
+![终端（Terminal）是如何利用 PTY 和 Shell 或用户应用程序进行通信的](.img/终端（Terminal）是如何利用%20PTY%20和%20Shell%20或用户应用程序进行通信的.png)
+
+![当你使用终端并通过键盘按下 'a' 时，字母 'a' 是如何显示在终端上的](.img/当你使用终端并通过键盘按下%20'a'%20时，字母%20'a'%20是如何显示在终端上的.png)
+
+![当 C 程序试图通过 scanf() 读取一行输入时，键盘的输入是如何传递到应用程序和屏幕的](.img/当%20C%20程序试图通过%20scanf()%20读取一行输入时，键盘的输入是如何传递到应用程序和屏幕的.png)
+
+![当 C 程序试图通过 printf() 或 putc() 打印输出时，输出是如何传递到屏幕的](.img/当%20C%20程序试图通过%20printf()%20或%20putc()%20打印输出时，输出是如何传递到屏幕的.png)
+
 **与 mini-tmux 的关系**：每个 Pane 里运行的程序（比如 shell、vim、top）都以为自己连着一个真实终端，这样它们才能正确处理行编辑、光标移动、颜色输出等功能。mini-tmux 的 Server 通过 PTY 的 master 端读写这些程序的输入输出。如果不用 PTY 而是用普通的 pipe，程序会检测到自己没有连着终端（`isatty()` 返回 false），从而关闭交互功能，退化为纯文本批处理模式。
+
+![tmux 做了什么？](.img/tmux%20做了什么？.png)
 
 > 思考：
 > 1. 当你在 PTY master 端写入字符 `'a'` 时，slave 端的程序会读到什么？如果写入的是 `Ctrl+C`（即字节 `0x03`），slave 端会发生什么？谁负责处理这个控制字符？
@@ -120,6 +132,8 @@ I/O 多路复用（I/O Multiplexing）让一个线程能同时监听多个文件
 
 **与 mini-tmux 的关系**：mini-tmux 的 Server 需要同时监听多个 fd，包括监听 socket（等待新 Client 连接）、所有已连接 Client 的 socket（接收输入）、所有 Pane 的 PTY master（接收程序输出）。使用 `poll()` 或 `epoll` 构建事件循环（Event Loop）是实现 Server 的核心架构模式。
 
+![tmux 做了什么？](.img/tmux%20做了什么？.png)
+
 > 思考：
 > 1. `poll()` 和 `epoll` 在 fd 数量较少时性能差异不大，但在 fd 数量很多时 `epoll` 更高效。为什么？它们在内部实现上有什么本质区别？
 > 2. 如果 Server 的事件循环中某个回调函数执行时间过长（比如一次性处理大量数据），会对其他 fd 的响应延迟产生什么影响？
@@ -132,6 +146,10 @@ I/O 多路复用（I/O Multiplexing）让一个线程能同时监听多个文件
 ### 2.6 终端 raw mode 与 termios
 
 终端默认工作在 canonical mode（行缓冲模式）：用户输入一行后按回车，程序才能读到。而 raw mode 关闭了行缓冲、回显、信号字符处理等所有终端层的加工，程序能逐字节地读到用户的每一次按键。
+
+![当你使用终端并通过键盘按下 'a' 时，字母 'a' 是如何显示在终端上的](.img/当你使用终端并通过键盘按下%20'a'%20时，字母%20'a'%20是如何显示在终端上的.png)
+
+![当 C 程序试图通过 scanf() 读取一行输入时，键盘的输入是如何传递到应用程序和屏幕的](.img/当%20C%20程序试图通过%20scanf()%20读取一行输入时，键盘的输入是如何传递到应用程序和屏幕的.png)
 
 **与 mini-tmux 的关系**：mini-tmux 的 Client 必须将自己的终端设置为 raw mode，否则 `Ctrl+B`（前缀键）会被终端驱动处理而不是传给 Client 程序，`Ctrl+C` 会直接杀掉 Client 而不是转发给 Pane。Client 退出时必须恢复终端的原始设置，否则用户的终端会变得无法正常使用。
 
@@ -147,6 +165,8 @@ I/O 多路复用（I/O Multiplexing）让一个线程能同时监听多个文件
 ### 2.7 文件描述符 dup2 与 pipe
 
 文件描述符（File Descriptor, fd）是进程访问文件、socket、PTY 等 I/O 资源的整数句柄。`dup2()` 可以将一个 fd 复制到指定的 fd 编号上（通常用于将 PTY slave 重定向到 stdin/stdout/stderr）。`pipe()` 创建一对 fd，一端写入的数据可以从另一端读出。
+
+![dup2 用于重定向 stdin stdout stderr 的原理](.img/dup2%20用于重定向%20stdin%20stdout%20stderr%20的原理.png)
 
 **与 mini-tmux 的关系**：创建 Pane 时，子进程需要用 `dup2()` 将 PTY slave 的 fd 设置为自己的 stdin（fd 0）、stdout（fd 1）、stderr（fd 2），然后关闭多余的 fd，再 `exec` shell。`:pipeout` 命令需要 `pipe()` 创建管道，将 Pane 输出同时写入外部命令的 stdin。fd 泄漏（忘记关闭不需要的 fd）是 mini-tmux 实现中最常见的 bug 之一。
 
