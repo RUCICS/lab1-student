@@ -647,6 +647,8 @@ git-ai blame file.c   # 查看每行的归因（类似 git blame）
 | Claude Code | 运行 `/export` 命令，或直接复制 `~/.claude/projects/` 下的 `.jsonl` 文件 |
 | Cursor | File > Export Chat，或使用 [cursor-chat-export](https://github.com/somogyijanos/cursor-chat-export) 批量导出 |
 | GitHub Copilot | VS Code 中 `Ctrl+Shift+P` > `Chat: Export Chat...` 导出 JSON |
+| Codex | 会话自动保存在 `~/.codex/sessions/` 下的 `.jsonl` 文件中，直接复制即可 |
+| Trae | 暂无完整导出功能，截图保存关键对话或逐条复制到 Markdown 文件 |
 | ChatGPT / Claude 网页版 | 手动复制对话，或在设置中导出数据 |
 | 其他工具 | 截图或手动复制均可，关键是保留完整上下文 |
 
