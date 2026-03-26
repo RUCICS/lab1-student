@@ -1,0 +1,51 @@
+name: Basic Tests
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+
+      - name: Build
+        run: make
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install harness dependencies
+        run: pip install pexpect pyyaml psutil
+
+      - name: Fetch harness
+        uses: actions/checkout@v4
+        with:
+          repository: RUCICS/lab1
+          token: ${{ secrets.HARNESS_PAT }}
+          path: _harness
+          sparse-checkout: |
+            harness
+            scripts
+
+      - name: Run basic public tests
+        run: |
+          cd _harness
+          python scripts/run_public.py \
+            --binary "${{ github.workspace }}/mini-tmux" \
+            --workloads "${{ github.workspace }}/workloads/public" \
+            --report "${{ github.workspace }}/report.json"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: report.json

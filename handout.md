@@ -53,19 +53,37 @@ make clean      # 清理编译产物
 
 伪终端（Pseudo-terminal, PTY）是一对互相连通的字符设备，一端叫 master，一端叫 slave，程序写入 master 的数据会从 slave 读出，反之亦然，模拟了一个"真实终端"的行为。
 
-![神奇的 pty：就像传送门一样](.img/神奇的%20pty：就像传送门一样.png)
+```
+PTY 的本质：一对互通的端点
 
-![终端（Terminal）是如何利用 PTY 和 Shell 或用户应用程序进行通信的](.img/终端（Terminal）是如何利用%20PTY%20和%20Shell%20或用户应用程序进行通信的.png)
+  write() ──►┌────────┐         ┌────────┐◄── read()
+             │ master │ ~~~~~~~ │ slave  │
+  read()  ◄──┘────────┘         └────────┘──► write()
 
-![当你使用终端并通过键盘按下 'a' 时，字母 'a' 是如何显示在终端上的](.img/当你使用终端并通过键盘按下%20'a'%20时，字母%20'a'%20是如何显示在终端上的.png)
+  你的程序持有 master fd          子进程（shell/vim）持有 slave fd
+```
 
-![当 C 程序试图通过 scanf() 读取一行输入时，键盘的输入是如何传递到应用程序和屏幕的](.img/当%20C%20程序试图通过%20scanf()%20读取一行输入时，键盘的输入是如何传递到应用程序和屏幕的.png)
+在一个普通终端中，数据流是这样的：
 
-![当 C 程序试图通过 printf() 或 putc() 打印输出时，输出是如何传递到屏幕的](.img/当%20C%20程序试图通过%20printf()%20或%20putc()%20打印输出时，输出是如何传递到屏幕的.png)
+```
+没有 tmux 时：
+
+  键盘 ──► terminal ──► master fd ···PTY··· slave fd ──► shell
+  屏幕 ◄── terminal ◄── master fd ···PTY··· slave fd ◄── shell
+```
 
 **与 mini-tmux 的关系**：每个 Pane 里运行的程序（比如 shell、vim、top）都以为自己连着一个真实终端，这样它们才能正确处理行编辑、光标移动、颜色输出等功能。mini-tmux 的 Server 通过 PTY 的 master 端读写这些程序的输入输出。如果不用 PTY 而是用普通的 pipe，程序会检测到自己没有连着终端（`isatty()` 返回 false），从而关闭交互功能，退化为纯文本批处理模式。
 
-![tmux 做了什么？](.img/tmux%20做了什么？.png)
+tmux 做的事情就是在 terminal 和 PTY 之间插入一层 Client-Server：
+
+```
+有 tmux 时：
+
+  键盘 ──► terminal ──► Client ═══socket═══ Server ──► master fd ··· slave fd ──► shell
+  屏幕 ◄── terminal ◄── Client ═══socket═══ Server ◄── master fd ··· slave fd ◄── shell
+
+  Client 断开？Server 和 shell 继续运行。重新 attach 就回来了。
+```
 
 > 思考：
 > 1. 当你在 PTY master 端写入字符 `'a'` 时，slave 端的程序会读到什么？如果写入的是 `Ctrl+C`（即字节 `0x03`），slave 端会发生什么？谁负责处理这个控制字符？
@@ -96,7 +114,7 @@ make clean      # 清理编译产物
 
 ### 2.3 信号语义
 
-信号（Signal）是 Unix 系统中进程间异步通知的机制。不同的信号有不同的默认行为和触发方式，理解以下几个信号对 mini-tmux 的实现至关重要：
+信号（Signal）是 Unix 系统中进程间异步通知的机制。mini-tmux 需要正确处理以下几个信号：
 
 | 信号 | 触发方式 | 与 mini-tmux 的关系 |
 |------|---------|-------------------|
@@ -134,7 +152,17 @@ I/O 多路复用（I/O Multiplexing）让一个线程能同时监听多个文件
 
 **与 mini-tmux 的关系**：mini-tmux 的 Server 需要同时监听多个 fd，包括监听 socket（等待新 Client 连接）、所有已连接 Client 的 socket（接收输入）、所有 Pane 的 PTY master（接收程序输出）。使用 `poll()` 或 `epoll` 构建事件循环（Event Loop）是实现 Server 的核心架构模式。
 
-![tmux 做了什么？](.img/tmux%20做了什么？.png)
+Server 的事件循环需要同时监听所有这些 fd：
+
+```
+poll() / epoll 监听的 fd 集合：
+
+  ┌─ listen_fd        （新 Client 连接）
+  ├─ client_fd[0..n]  （已连接 Client 的输入）
+  └─ pty_master[0..m] （各 Pane 程序的输出）
+
+  任意一个 fd 就绪 → 立即处理 → 回到 poll 等待
+```
 
 > 思考：
 > 1. `poll()` 和 `epoll` 在 fd 数量较少时性能差异不大，但在 fd 数量很多时 `epoll` 更高效。为什么？它们在内部实现上有什么本质区别？
@@ -174,11 +202,21 @@ scanf("%d %d %d", &a, &b, &c);
 | raw 模式 + ECHO 关闭（如 vim） | **否** | 应用程序自己决定输出什么 |
 | raw 模式 + ECHO 开启（罕见） | **是** | 即使是 raw 模式，ECHO 标志仍然独立生效 |
 
-回顾这两张图：之所以第一张图中 'a' 直接到达 shell 然后从 shell 打印到屏幕上，而在第二张图中，当 C 程序试图通过 scanf() 读取一行输入时，键盘的输入先一个字符一个字符（包含 `\b` 退格等）地由 Linux Kernel 自动回显到屏幕上，在回车后再发送到应用程序，是因为：第一张图中，由于 shell 一般通过 readline 等库手工处理回显（为了方便实现按 tab 自动补全等功能），所以 shell 的 tty 一般工作在非行缓冲且不 echo 的模式下。而应用程序为了方便，一般工作在行缓冲且会 echo 的模式下。
+对比两种模式下按键 'a' 的数据流：
 
-![当你使用终端并通过键盘按下 'a' 时，字母 'a' 是如何显示在终端上的](.img/当你使用终端并通过键盘按下%20'a'%20时，字母%20'a'%20是如何显示在终端上的.png)
+```
+shell（raw + no echo）：
+  键盘 'a' ──► master fd ··PTY·· slave fd ──► shell 收到 'a'
+                                                shell 自己决定输出什么
+                                                shell write() ──► slave fd ··PTY·· master fd ──► 屏幕
 
-![当 C 程序试图通过 scanf() 读取一行输入时，键盘的输入是如何传递到应用程序和屏幕的](.img/当%20C%20程序试图通过%20scanf()%20读取一行输入时，键盘的输入是如何传递到应用程序和屏幕的.png)
+scanf 程序（canonical + echo）：
+  键盘 'a' ──► master fd ──┬── PTY 线路规程自动回显 'a' ──► master fd ──► 屏幕
+                           └── 存入行缓冲，等回车
+  键盘 '\n' ──► 行缓冲一次性发给 slave fd ──► scanf() 返回
+```
+
+shell 通过 readline 等库自己处理回显（为了支持 tab 补全等），所以工作在 raw + no echo 模式。普通 C 程序默认工作在 canonical + echo 模式。
 
 **与 mini-tmux 的关系**：mini-tmux 的 Client 必须将自己的终端设置为 raw mode，否则 `Ctrl+B`（前缀键）会被终端驱动处理而不是传给 Client 程序，`Ctrl+C` 会直接杀掉 Client 而不是转发给 Pane。Client 退出时必须恢复终端的原始设置，否则用户的终端会变得无法正常使用。
 
@@ -195,7 +233,16 @@ scanf("%d %d %d", &a, &b, &c);
 
 文件描述符（File Descriptor, fd）是进程访问文件、socket、PTY 等 I/O 资源的整数句柄。`dup2()` 可以将一个 fd 复制到指定的 fd 编号上（通常用于将 PTY slave 重定向到 stdin/stdout/stderr）。`pipe()` 创建一对 fd，一端写入的数据可以从另一端读出。
 
-![dup2 用于重定向 stdin stdout stderr 的原理](.img/dup2%20用于重定向%20stdin%20stdout%20stderr%20的原理.png)
+```
+dup2(slave_fd, STDIN_FILENO) 的效果：
+
+  修改前                          修改后
+  fd 0 ──► stdin 设备             fd 0 ──► slave_fd（PTY slave）
+  fd 1 ──► stdout 设备            fd 1 ──► stdout 设备
+  fd 3 ──► slave_fd               fd 3 ──► slave_fd（之后应 close）
+
+  对 stdout、stderr 也做同样的 dup2，子进程的全部 IO 就都走 PTY 了。
+```
 
 **与 mini-tmux 的关系**：创建 Pane 时，子进程需要用 `dup2()` 将 PTY slave 的 fd 设置为自己的 stdin（fd 0）、stdout（fd 1）、stderr（fd 2），然后关闭多余的 fd，再 `exec` shell。`:pipeout` 命令需要 `pipe()` 创建管道，将 Pane 输出同时写入外部命令的 stdin。fd 泄漏（忘记关闭不需要的 fd）是 mini-tmux 实现中最常见的 bug 之一。
 
@@ -249,9 +296,21 @@ ls -la /tmp/tmux-$(id -u)/
 
 你会看到一个 socket 文件。Server 和 Client 就是通过这个 Unix domain socket 通信的。你的 mini-tmux 也要这样做。
 
-当你在你的 Ubuntu Desktop 上打开两个 Gnome Terminal 并同时在两个 terminal 中运行 tmux 时，会发生下图中的事情：
+当你打开两个终端窗口，各自运行 tmux attach，会形成这样的结构：
 
-![tmux 的 C/S 架构](.img/tmux%20的%20CS%20架构.png)
+```
+Terminal 1                                          Terminal 2
+┌──────────┐                                       ┌──────────┐
+│ Client 1 │──┐                                 ┌──│ Client 2 │
+│ 显示+输入 │  │    Unix domain socket           │  │ 显示+输入 │
+└──────────┘  │  ┌──────────────────────────┐   │  └──────────┘
+              ├──│        Server            │───┤
+                 │  ┌─ PTY ─┐  ┌─ PTY ─┐   │
+                 │  │ bash  │  │  vim   │   │
+                 │  └───────┘  └───────┘   │
+                 └──────────────────────────┘
+                 后台常驻，Client 断开不影响
+```
 
 你需要自己设计 Server 与 Client 之间的通信协议，这是一个重要的设计决策：Server 是直接转发各 PTY 的原始字节流让 Client 自己渲染，还是在 Server 端完成渲染后推送结构化的屏幕数据？两种方案各有优劣，请自行权衡。
 
@@ -529,43 +588,60 @@ Probe 通过侧信道报告的信息包括：
 
 公开测试用例覆盖以下维度：
 
-| 类别 | 测试内容 |
-|------|---------|
-| 基础 I/O | 单 Pane 环境自检、输入输出 token 透传 |
-| 信号隔离 | 多 Pane 下 Ctrl+C / Ctrl+Z 只影响焦点 Pane |
-| 窗格管理 | 创建、销毁、快速创建销毁循环 |
-| 进程管理 | 僵尸回收、进程组隔离 |
-| Resize | 窗口大小变化时正确发送 SIGWINCH 并更新 winsize |
-| 屏幕布局 | 多 Pane 同时可见，winsize 与布局联动 |
-| 压力测试 | 8 Pane 并发、高频输出、TUI 程序兼容性 |
-| 会话管理 | Detach/Reattach，Client 异常断开后 Server 存活 |
-| 输出日志 | `:log` 基础功能 |
-| 输出管道 | `:pipeout` 基础功能，外部命令退出自动清理 |
-| 多 Client | 多个 Client 同时 attach，输出广播，只读 Client |
-| 屏幕捕获 | `:capture` 导出 Pane 内容 |
-| Server 生命周期 | 最后一个 Pane 退出后 Server 清理退出 |
+| 类别 | 测试内容 | 基础/Bonus |
+|------|---------|-----------|
+| 基础 I/O | 单 Pane 环境自检、输入输出 token 透传 | 基础 |
+| 高频输出 / TUI 兼容 | 高频输出不丢数据、TUI 程序正常运行 | 基础 |
+| 会话管理 | Detach/Reattach，Client 异常断开后 Server 存活 | 基础 |
+| 多 Session 信号隔离 | 多 session 下 Ctrl+C / Ctrl+Z 不跨 session | 基础 |
+| Session 管理 | session 创建、销毁、快速创建销毁循环 | 基础 |
+| 进程管理 | 僵尸回收、进程组隔离 | 基础 |
+| 多 Client | 多个 Client 各连不同 session | 基础 |
+| Server 生命周期 | 最后一个 session 退出后 Server 清理退出 | 基础 |
+| 压力测试 | 多 session 并发、SIGTSTP/SIGCONT | 基础 |
+| Resize (SIGWINCH) | 窗口大小变化时正确发送 SIGWINCH 并更新 winsize | Bonus |
+| 多 Pane / 屏幕布局 | 多 Pane 同时可见，winsize 与布局联动 | Bonus |
+| 输出日志 | `:log` 基础功能 | Bonus |
+| 输出管道 | `:pipeout` 基础功能，外部命令退出自动清理 | Bonus |
+| 屏幕捕获 | `:capture` 导出 Pane 内容 | Bonus |
 
 你可以阅读 `workloads/public/` 中的 YAML 文件来精确了解每个测试的步骤和验证点。每个 YAML 文件描述了一个完整的测试场景：启动条件、操作序列（创建 Pane、发送按键、切换焦点等）和验证断言（环境检查、信号是否送达、token 是否透传等）。仔细阅读这些文件，你会清楚地知道评测在检查什么。
 
 ### 4.3 评分规则
 
-总成绩 = 代码（50%）+ 报告或 Presentation（50%）。认真做了就能拿到不错的成绩。
+总成绩 = min(基础代码 + 报告/Presentation + Bonus, 100)。认真做了就能拿到不错的成绩。
 
-#### 代码（50%）
+| 组成 | 满分 | 说明 |
+|------|-----:|------|
+| 基础代码 | 50 | 四阶段自动评测，通过率 x 50 |
+| 报告 / Presentation | 50 | 学习过程 + AI 协作质量 |
+| Bonus | 最多 25 | 多 Pane、SIGWINCH、Log、Pipeout、Capture 等 |
+| **总分上限** | **100** | Bonus 可补基础或报告的缺口，但总分不超过 100 |
 
-自动评测，满分 100，按三个层级计分：
+例：基础 0 分 + Bonus 全对 = 25 + 报告分。基础 50 + Bonus 20 + 报告 50 = 100（被 cap）。
 
-| 层级 | 满分 | 覆盖功能 |
-|:-----|-----:|:---------|
-| 基础 | 75 | Pane 创建/销毁/切换、基础 IO、信号隔离、僵尸回收、窗口 resize、压力测试、Server 生命周期 |
-| 进阶 | 15 | Detach/Reattach、Log、Pipeout |
-| 挑战 | 10 | 多 Client 同时连接、Layout 分屏、Capture 屏幕捕获 |
+#### 基础代码（50 分）
 
-层级内所有测试用例等权，层级得分 = 通过率 x 该层满分。**通过全部基础层测试 = 75 分。** 进阶和挑战做到多少算多少。建议按层级顺序实现。
+自动评测，按四个阶段计分：
 
-学期内进行两次盲测（中期检查、最终提交各一次），自动运行全部测试，返回每个层级和类别的通过数与得分，不返回失败原因。盲测与公开测试同分布，不引入新的负载类型。
+| 阶段 | 覆盖功能 | 关键测试 |
+|------|---------|---------|
+| 单 Pane | PTY 创建、基础 IO、TUI 兼容 | 01, 05, 09, 10 |
+| Client-Server | Unix socket 通信、C/S 拆分 | 相关测试 |
+| Detach/Reattach | Server 持久化、Client 重连 | 13, 14, 21 |
+| 多 Session / 多 Client | 信号隔离、僵尸回收、多 client 各连不同 session | 18, 19 + 改编后的 02, 03, 04, 06, 08, 11, 12 |
 
-#### 报告或 Presentation（50%）
+四阶段内所有测试用例等权，得分 = 总通过率 x 50。建议按阶段顺序实现。
+
+#### Bonus（最多 25 分）
+
+多 Pane（含 Layout）、SIGWINCH、Log、Pipeout、Capture。对应测试：07, 15, 16, 17, 20, 22, 23。Bonus 测试等权，得分 = 通过率 x 25。
+
+#### 盲测
+
+每天自动运行一次 main 分支的全部测试，返回每个类别的通过数与得分，不返回失败原因。盲测与公开测试同分布，不引入新的负载类型。
+
+#### 报告或 Presentation（50 分）
 
 二选一（见第 5 节），评价学习过程和 AI 协作质量，不要求代码完美。选择 Presentation 的同学可获得额外加分，**加分可补到代码得分上**。具体评分标准后续通知。
 
