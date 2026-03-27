@@ -3,8 +3,8 @@ id: t_8session_stress
 category: stress
 timeout_sec: 30
 terminal:
-  rows: 24
-  cols: 80
+  rows: 48
+  cols: 120
 steps:
   - action: start
   - action: create_pane_with_probe

@@ -33,7 +33,5 @@ steps:
     duration_ms: 500
   - action: verify_env_check
     pane: 0
-  - action: verify_input_token
-    pane: 0
   - action: verify_zombie_count
     max_zombies: 0

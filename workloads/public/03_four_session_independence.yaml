@@ -1,4 +1,4 @@
-name: "4 sessions with independent IO verification"
+name: "4 sessions with independent IO and signal isolation"
 id: t_4session_independence
 category: session_management
 timeout_sec: 30
