@@ -1,6 +1,6 @@
-name: "Rapid pane create/destroy cycle"
-id: t_rapid_pane_ops
-category: pane_management
+name: "Rapid session create/destroy cycle"
+id: t_rapid_session_ops
+category: session_management
 timeout_sec: 20
 terminal:
   rows: 24
@@ -10,24 +10,24 @@ steps:
   - action: create_pane_with_probe
   - action: wait_probe_ready
     pane: 0
-  - action: create_pane
+  - action: create_session
   - action: wait
     duration_ms: 300
-  - action: kill_pane
+  - action: kill_session
     pane: 1
   - action: wait
     duration_ms: 300
-  - action: create_pane
+  - action: create_session
   - action: wait
     duration_ms: 300
-  - action: kill_pane
+  - action: kill_session
     pane: 2
   - action: wait
     duration_ms: 300
-  - action: create_pane
+  - action: create_session
   - action: wait
     duration_ms: 300
-  - action: kill_pane
+  - action: kill_session
     pane: 3
   - action: wait
     duration_ms: 500

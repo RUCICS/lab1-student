@@ -1,0 +1,80 @@
+name: Basic Tests
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+
+      - name: Build student binary
+        run: make
+
+      - name: Build harness helpers
+        run: make -C harness/helpers
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install harness dependencies
+        run: pip install pexpect pyyaml psutil
+
+      - name: Run basic public tests
+        run: |
+          python harness/run_tests.py \
+            --binary "${{ github.workspace }}/mini-tmux" \
+            --workloads "${{ github.workspace }}/workloads/public" \
+            --report "${{ github.workspace }}/report.json"
+
+      - name: Show results
+        if: always()
+        run: |
+          if [ ! -f report.json ]; then
+            echo "No report.json found." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          python3 - <<'PYEOF'
+          import json, os
+
+          with open("report.json") as f:
+              report = json.load(f)
+
+          lines = []
+          lines.append("## Basic Test Results\n")
+
+          total = report.get("total_count", 0)
+          passed = report.get("pass_count", 0)
+          lines.append(f"**Passed {passed}/{total} tests**\n")
+
+          lines.append("| Test | Status |")
+          lines.append("|------|--------|")
+          for w in report.get("workloads", []):
+              icon = "\u2705" if w["passed"] else "\u274c"
+              detail = ""
+              if not w["passed"] and w.get("failed_step"):
+                  detail = f" \u2014 {w['failed_step']}"
+              lines.append(f"| {w['name']} | {icon}{detail} |")
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "")
+          if summary_path:
+              with open(summary_path, "a") as f:
+                  f.write("\n".join(lines) + "\n")
+          else:
+              print("\n".join(lines))
+          PYEOF
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: report.json

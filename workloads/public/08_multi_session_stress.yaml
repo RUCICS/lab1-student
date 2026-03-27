@@ -1,20 +1,20 @@
-name: "8 pane creation stress"
-id: t_8pane_stress
+name: "8 session creation stress"
+id: t_8session_stress
 category: stress
 timeout_sec: 30
 terminal:
-  rows: 48
-  cols: 120
+  rows: 24
+  cols: 80
 steps:
   - action: start
   - action: create_pane_with_probe
-  - action: create_pane_with_probe
-  - action: create_pane_with_probe
-  - action: create_pane_with_probe
-  - action: create_pane_with_probe
-  - action: create_pane_with_probe
-  - action: create_pane_with_probe
-  - action: create_pane_with_probe
+  - action: create_session_with_probe
+  - action: create_session_with_probe
+  - action: create_session_with_probe
+  - action: create_session_with_probe
+  - action: create_session_with_probe
+  - action: create_session_with_probe
+  - action: create_session_with_probe
   - action: wait_probe_ready
     pane: 0
   - action: wait_probe_ready
