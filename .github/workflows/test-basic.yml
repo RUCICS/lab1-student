@@ -35,13 +35,75 @@ jobs:
             harness
             scripts
 
+      - name: Stage basic tests only
+        run: |
+          mkdir -p _basic_workloads
+          for f in \
+            01_single_pane_basic.yaml \
+            02_two_session_signal_isolation.yaml \
+            03_multi_session_independence.yaml \
+            04_session_create_destroy.yaml \
+            05_high_freq_output.yaml \
+            06_zombie_reap.yaml \
+            08_multi_session_stress.yaml \
+            09_tui_compat.yaml \
+            10_concurrent_output.yaml \
+            11_sigtstp_sigcont.yaml \
+            12_rapid_session_ops.yaml \
+            13_detach_reattach_basic.yaml \
+            14_detach_probe_survives.yaml \
+            18_multi_client_basic.yaml \
+            19_multi_client_readonly.yaml \
+            21_last_pane_exit.yaml \
+          ; do
+            cp "workloads/public/$f" _basic_workloads/
+          done
+
       - name: Run basic public tests
         run: |
           cd _harness
           python scripts/run_public.py \
             --binary "${{ github.workspace }}/mini-tmux" \
-            --workloads "${{ github.workspace }}/workloads/public" \
+            --workloads "${{ github.workspace }}/_basic_workloads" \
             --report "${{ github.workspace }}/report.json"
+
+      - name: Show score summary
+        if: always()
+        run: |
+          if [ ! -f report.json ]; then
+            echo "No report.json found." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          python3 - <<'PYEOF'
+          import json, os
+
+          with open("report.json") as f:
+              report = json.load(f)
+
+          lines = []
+          lines.append("## Basic Test Results\n")
+
+          total = report.get("total_count", 0)
+          passed = report.get("pass_count", 0)
+          lines.append(f"**Passed {passed}/{total} tests**\n")
+
+          # Per-workload table
+          lines.append("| Test | Status |")
+          lines.append("|------|--------|")
+          for w in report.get("workloads", []):
+              icon = "\u2705" if w["passed"] else "\u274c"
+              detail = ""
+              if not w["passed"] and w.get("failed_step"):
+                  detail = f" \u2014 {w['failed_step']}"
+              lines.append(f"| {w['name']} | {icon}{detail} |")
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "")
+          if summary_path:
+              with open(summary_path, "a") as f:
+                  f.write("\n".join(lines) + "\n")
+          else:
+              print("\n".join(lines))
+          PYEOF
 
       - name: Upload report
         if: always()

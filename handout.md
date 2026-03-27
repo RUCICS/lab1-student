@@ -30,7 +30,7 @@ brew install tmux
 
 ### 1.2 你将要做什么
 
-你将从零实现一个简化版终端复用器 mini-tmux。它具备 tmux 的核心架构：后台 Server 进程管理多个伪终端窗格（Pane），前台 Client 进程负责显示和接收用户输入，两者通过 Unix domain socket 通信。你需要实现 Pane 的创建、销毁、焦点切换、信号精确投递、断开重连（Detach/Reattach）、多 Client 同时连接、输出日志、输出管道等功能。
+你将从零实现一个简化版终端复用器 mini-tmux。它具备 tmux 的核心架构：后台 Server 进程管理伪终端（PTY）和 shell 子进程，前台 Client 进程负责显示和接收用户输入，两者通过 Unix domain socket 通信。基础部分需要实现：单 Pane 的 PTY 管理、Client-Server 分离、断开重连（Detach/Reattach）、多 Session 信号隔离、多 Client 同时连接。在此基础上，Bonus 功能包括多 Pane 屏幕分割、窗口大小变化（SIGWINCH）、输出日志、输出管道、屏幕捕获等。
 
 这不是一个玩具项目。实现过程中你会深入接触进程管理、伪终端、信号机制、socket 通信、I/O 多路复用等操作系统核心概念。这些概念在课本上可能只有几行定义，但在 mini-tmux 中它们会以错综复杂的方式交织在一起。
 
@@ -357,7 +357,7 @@ echo $TERM             # 通常是 screen 或 xterm-256color
 
 首次启动时自动创建 Pane 0。
 
-### 3.4 命令模式
+### 3.4 命令模式（Bonus: 多 Pane）
 
 先在 tmux 里试一下命令模式的手感。按 `Ctrl+B` 然后按 `:`，你会看到底部出现一个冒号提示符。输入 `split-window` 然后回车，屏幕被分成了上下两半。再按 `Ctrl+B` + `:`，输入 `kill-pane`，刚创建的 pane 被关掉了。
 
@@ -375,7 +375,7 @@ mini-tmux 的命令模式类似，但命令名称更简单：
 
 **最后一个 Pane 退出的行为**：当最后一个 Pane 中的子进程退出（或被 `:kill` 销毁且没有其他 Pane 存在）时，Server 应当清理资源并退出，所有 attached Client 也应当退出。
 
-### 3.5 屏幕布局
+### 3.5 屏幕布局（Bonus: 多 Pane）
 
 在 tmux 中按 `Ctrl+B` + `%` 垂直分割（或 `"` 水平分割），观察屏幕如何被分成两半。试试在两个 pane 中分别运行 `stty size`，你会发现它们报告的行列数加起来大约等于总行数（减去分隔行）。再试试拖动终端窗口改变大小，两边的 `stty size` 都会跟着变。
 
@@ -462,7 +462,7 @@ Server 支持多个 Client 同时 attach 到同一个 session：
 - **终端大小**：当多个 Client attached 时，Server 将 Pane 的 winsize 设置为所有 attached Client 终端大小的最小值（行数取最小，列数取最小）。Client attach 或 detach 时重新计算并更新所有 Pane 的 winsize，发送 SIGWINCH
 - **Client 异常断开**：Client 进程被 kill 或连接中断时，Server 不退出，等效于该 Client detach
 
-### 3.9 高级命令
+### 3.9 高级命令（Bonus）
 
 tmux 的 `capture-pane` 和 `pipe-pane` 是非常实用的调试工具。试试：
 
@@ -596,7 +596,7 @@ Probe 通过侧信道报告的信息包括：
 | 多 Session 信号隔离 | 多 session 下 Ctrl+C / Ctrl+Z 不跨 session | 基础 |
 | Session 管理 | session 创建、销毁、快速创建销毁循环 | 基础 |
 | 进程管理 | 僵尸回收、进程组隔离 | 基础 |
-| 多 Client | 多个 Client 各连不同 session | 基础 |
+| 多 Client | 多个 Client 连接同一 session，广播与只读 | 基础 |
 | Server 生命周期 | 最后一个 session 退出后 Server 清理退出 | 基础 |
 | 压力测试 | 多 session 并发、SIGTSTP/SIGCONT | 基础 |
 | Resize (SIGWINCH) | 窗口大小变化时正确发送 SIGWINCH 并更新 winsize | Bonus |
@@ -605,7 +605,7 @@ Probe 通过侧信道报告的信息包括：
 | 输出管道 | `:pipeout` 基础功能，外部命令退出自动清理 | Bonus |
 | 屏幕捕获 | `:capture` 导出 Pane 内容 | Bonus |
 
-你可以阅读 `workloads/public/` 中的 YAML 文件来精确了解每个测试的步骤和验证点。每个 YAML 文件描述了一个完整的测试场景：启动条件、操作序列（创建 Pane、发送按键、切换焦点等）和验证断言（环境检查、信号是否送达、token 是否透传等）。仔细阅读这些文件，你会清楚地知道评测在检查什么。
+你可以阅读 `workloads/public/` 中的 YAML 文件来精确了解每个测试的步骤和验证点。每个 YAML 文件描述了一个完整的测试场景：启动条件、操作序列（启动 Probe、发送按键、创建 Session 等）和验证断言（环境检查、信号是否送达、token 是否透传等）。仔细阅读这些文件，你会清楚地知道评测在检查什么。
 
 ### 4.3 评分规则
 
@@ -627,9 +627,9 @@ Probe 通过侧信道报告的信息包括：
 | 阶段 | 覆盖功能 | 关键测试 |
 |------|---------|---------|
 | 单 Pane | PTY 创建、基础 IO、TUI 兼容 | 01, 05, 09, 10 |
-| Client-Server | Unix socket 通信、C/S 拆分 | 相关测试 |
+| Client-Server | Unix socket 通信、C/S 拆分 | （隐含在所有测试中） |
 | Detach/Reattach | Server 持久化、Client 重连 | 13, 14, 21 |
-| 多 Session / 多 Client | 信号隔离、僵尸回收、多 client 各连不同 session | 02, 03, 04, 06, 08, 11, 12, 18, 19 |
+| 多 Session / 多 Client | 多 session 信号隔离、僵尸回收、多 client 同 session 广播/只读 | 02, 03, 04, 06, 08, 11, 12, 18, 19 |
 
 四阶段内所有测试用例等权，得分 = 总通过率 x 50。建议按阶段顺序实现。
 
@@ -637,9 +637,13 @@ Probe 通过侧信道报告的信息包括：
 
 多 Pane（含 Layout）、SIGWINCH、Log、Pipeout、Capture。对应测试：07, 15, 16, 17, 20, 22, 23。Bonus 测试等权，得分 = 通过率 x 25。
 
-#### 盲测
+#### 公开测试 CI
 
-每天自动运行一次 main 分支的全部测试，返回每个类别的通过数与得分，不返回失败原因。盲测与公开测试同分布，不引入新的负载类型。
+每次 push 到 main 分支时，GitHub Actions 自动运行 16 个公开基础测试，结果显示在 Actions 页面（通过数和每个测试的 pass/fail，不显示分数）。Bonus 测试不在此范围内。
+
+#### 定期盲测
+
+每三天自动运行一次 main 分支的全部测试（公开 + 隐藏，基础 + Bonus），返回每个类别的通过数与得分，不返回失败原因。盲测与公开测试同分布，不引入新的负载类型。
 
 #### 报告或 Presentation（50 分）
 
@@ -663,7 +667,7 @@ make clean      # 清理编译产物
 **手动验证**：前面各节已经给出了大量可以在 tmux 上动手验证的操作，你应该在自己的 mini-tmux 上逐一重复这些操作，确认行为与 tmux 一致。重点关注：
 
 - `isatty()`、`tty`、`stty size` 是否正确（3.3 节）
-- 多 Pane 下 `Ctrl+C` 是否只杀焦点 Pane 的进程（3.6 节）
+- 多 Session 下 `Ctrl+C` 是否只影响目标 Session 的进程（3.6 节）
 - Detach 后 `ps aux` 确认 Server 和 Pane 进程还在（3.7 节）
 - `/proc/<pid>/fd/` 检查 fd 数量在创建销毁 Pane 后是否回到初始值（3.10 节）
 
@@ -678,6 +682,8 @@ make clean      # 清理编译产物
 ### 4.6 提交方式
 
 通过 GitHub Classroom 提交。将你的代码推送到分配的仓库即可。确保 `make` 能在干净的 Linux 环境中编译成功。
+
+**截止时间**：2026-04-16 23:59。
 
 ### 4.7 AI 使用记录
 

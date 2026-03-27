@@ -4,9 +4,9 @@
 
 这是怎么做到的？说实话第一次用 tmux 的时候我也觉得挺神奇的。但你拆开来看，原理并不复杂：你的程序其实从来就没有跑在你的终端里面。tmux 在后台起了一个 Server 进程，你的 bash 和它跑的所有程序都挂在 Server 下面。你看到的那个“终端窗口”只是一个 Client，它做的事情就是把你的键盘输入转发给 Server，再把 Server 传回来的屏幕内容显示出来。所以你关掉终端的时候，死掉的只是这个 Client 进程，Server 和 bash 完全不受影响。
 
-在这个 Lab 里，你要从零构建这整套系统。你造出来的 mini-tmux 应该能做到这些事情：敲一条命令就能进入一个新的会话，在里面跑 bash；按 `Ctrl+B D` 可以断开，但会话不会消失；用 `mini-tmux ls` 能看到哪些会话还活着；用 `mini-tmux attach` 能重新连回去；而且你可以同时开好几个终端，各自连着不同的会话。会话里的 shell 退出了，对应的会话就自动销毁。
+在这个 Lab 里，你要从零构建这整套系统。你造出来的 mini-tmux 应该能做到这些事情：敲一条命令就能进入一个新的会话，在里面跑 bash；按 `Ctrl+B D` 可以断开，但会话不会消失；用 `mini-tmux attach` 能重新连回去；而且你可以同时开好几个终端，各自连着不同的会话。会话里的 shell 退出了，对应的会话就自动销毁。
 
-把这些全做对，自动评测就是满分。测试用例可能比你想象的刁钻一些，所以 handout 里还有一些 Bonus 功能，做了可以加分。
+把这些全做对，基础代码部分就是满分（50 分）。测试用例可能比你想象的刁钻一些，所以 handout 里还有一些 Bonus 功能（最多 25 分），做了可以补基础或报告的缺口。
 
 听起来工作量很大？别被吓到，基础部分的代码量大概在几百行左右。这篇文档会带你一层一层拆开 tmux 的内部结构，前半部分给你能跑的 demo 和详细解释，后半部分越来越少代码、越来越多问题。这是故意的：前面帮你建立直觉，后面让你用这些直觉去指挥 AI。具体的功能 spec 和评分规则都在 [handout.md](handout.md) 里，这里不重复那些内容，我们只聊”怎么想”和”为什么要这样设计”。
 
@@ -105,7 +105,7 @@ PTY（Pseudo-Terminal，伪终端）本质上就是一对互相连通的字符�
 
 那如果不用 PTY，改用普通的 pipe 连接 bash 会怎样？bash 会发现“镜子不见了”，面前只有一根管子。它检测到自己不在终端里（`isatty()` 返回 false），就会关掉交互模式，退化成批处理模式。你可以亲手试试：把 `pty_shell.c` 里的 `forkpty` 换成 `fork` + `pipe`，然后在里面跑 `vim`，看看会发生什么（相信我，效果挺有意思的）。
 
-创建 PTY 有两种方式。`forkpty()` 帮你一步搞定 fork + 创建 PTY + `setsid()`，用起来很方便。另一种是自己调 `openpty()` 或者 `posix_openpt()` + `grantpt()` + `unlockpt()` 手动创建，麻烦一些，但能控制更多细节（比如 PTY 的 termios 属性）。你后面写 Server 的时候可能会需要后者，到时候再说。
+创建 PTY 有两种方式。`forkpty()` 帮你一步搞定 fork + 创建 PTY，用起来很方便。注意 `forkpty()` 不会调用 `setsid()`，后面写 Server 的时候你需要自己调（见 handout 3.3）。另一种是自己调 `openpty()` 或者 `posix_openpt()` + `grantpt()` + `unlockpt()` 手动创建，麻烦一些，但能控制更多细节（比如 PTY 的 termios 属性）。你后面写 Server 的时候可能会需要后者，到时候再说。
 
 📖 handout 2.1（PTY）、3.3（单 Pane 基础）
 
@@ -217,7 +217,7 @@ tmux 启动流程：
                                 └─ 父进程：再次 connect()（当 client）
 ```
 
-你的 mini-tmux 不一定要完全照搬这个流程。比如你可以把 Client 和 Server 做成两个独立的可执行文件，让用户手动先启动 Server 再启动 Client。不过最终你需要让用户只敲一条命令就能用起来，所以“自动检测并启动 Server”这个逻辑迟早是要做的。开始的时候先用简单方案跑通，后面再优化也行。
+你的 mini-tmux 不一定要完全照搬这个流程，但最终的编译产物必须是单个可执行文件 `mini-tmux`（见 handout 1.3）。开发过程中可以先用简单方案跑通，但最终要让用户只敲一条命令就能用起来。
 
 📖 handout 2.4（Unix domain socket）、2.5（I/O 多路复用）、3.1（架构）
 
@@ -269,7 +269,7 @@ Client 内部：
 
 但你动手的时候马上会撞上三个具体的技术问题。
 
-这三个问题都跟终端（TTY）有关。在 Linux 里，终端不是一个普通的文件。前面说过 everything is a file，终端确实也是一个 fd，你可以对它 `read()` / `write()`。但终端的特殊之处在于，它和你的程序之间还隔着一层内核里的 TTY 驱动（也叫线路规程，line discipline）。你打开 iTerm、gnome-terminal 或者任何终端模拟器的时候，内核都会给它分配一个 PTY，这个 PTY 里就有一个 TTY 驱动。所以你的 Client 进程从 stdin 读输入、往 stdout 写输出的时候，中间都要经过这层驱动。注意，在整个 mini-tmux 里其实有**两个** PTY，也就是两个 TTY 驱动：一个在 Client 这边（你的终端模拟器背后的），一个在 Server 那边（bash 跑在里面的）。这一节先说 Client 这边的，Server 那边的第 5 节会讲到。Client 这边的 TTY 驱动会“好心地”帮你做很多事情：攒够一行再交给程序（行缓冲）、把你打的字自动显示出来（回显）、看到 `Ctrl+C` 就发信号杀进程……在普通程序里这些默认行为很方便，但在写 tmux Client 的时候，它们每一个都会给你添麻烦。
+这三个问题都跟终端（TTY）有关。在 Linux 里，终端不是一个普通的文件。前面说过 everything is a file，终端确实也是一个 fd，你可以对它 `read()` / `write()`。但终端的特殊之处在于，它和你的程序之间还隔着一层内核里的 TTY 驱动（也叫线路规程，line discipline）。你打开 iTerm、gnome-terminal 或者任何终端模拟器的时候，内核都会给它分配一个 PTY，这个 PTY 里就有一个 TTY 驱动。所以你的 Client 进程从 stdin 读输入、往 stdout 写输出的时候，中间都要经过这层驱动。注意，在 mini-tmux 里有**多个** PTY：Client 这边有一个（你的终端模拟器背后的），Server 那边每个 Session 各有一个（bash 跑在里面的）。单 Session 的时候就是两个，多 Session 就是 1 + N 个。这一节先说 Client 这边的，Server 那边的第 5 节会讲到。Client 这边的 TTY 驱动会“好心地”帮你做很多事情：攒够一行再交给程序（行缓冲）、把你打的字自动显示出来（回显）、看到 `Ctrl+C` 就发信号杀进程……在普通程序里这些默认行为很方便，但在写 tmux Client 的时候，它们每一个都会给你添麻烦。
 
 ### 问题一：怎么不等回车就读到按键
 
@@ -422,7 +422,7 @@ Client 进程读到 'l' → socket → Server → master_fd
 
 除此之外，Server 还要处理 Client 发来的控制指令：创建 session、attach、detach、列出 session 等等。
 
-📖 handout 3.2（命令行接口）、3.4（命令模式）、3.11（命令汇总表）
+📖 handout 3.2（命令行接口）、3.11（命令汇总表）
 
 ### Server 的 PTY 管理
 
@@ -476,7 +476,7 @@ bash 退出的时候，因为 Server 是它的父进程，内核会给 Server �
 
 你可能会想：为什么不给每个 session 单独跑一个 Server？因为如果 session 分散在不同进程里，将来想做 session 之间的快速切换就很麻烦（基础部分还不需要切换，但架构上提前留好余地是值得的），也没法让多个 Client 灵活地连到不同的 session 上。一个 Server 统一管理所有 session，这正是 multiplexer 的意思。
 
-所以最终的结构是：一个 Server 同时管理多个 session，每个 session 有自己独立的 PTY 和 bash 进程。基础部分同一时刻只有一个 Client 连着，但 Client 可以 detach 之后重新 attach 到不同的 session。
+所以最终的结构是：一个 Server 同时管理多个 session，每个 session 有自己独立的 PTY 和 bash 进程。多个 Client 可以同时连到 Server，各自 attach 到不同的 session（也可以多个 Client attach 到同一个 session，见 handout 3.8）。Client 可以 detach 之后重新 attach 到不同的 session。
 
 Server 的 `poll()` 现在要盯的 fd 变多了：listen_fd、当前连着的 client_fd（如果有的话）、每个 session 的 master_fd。你需要一个数据结构来记录当前 Client attach 在哪个 session 上，这样 Client 发来键盘输入的时候你才知道该写到哪个 master_fd 里。
 
@@ -497,9 +497,7 @@ Server 的 `poll()` 现在要盯的 fd 变多了：listen_fd、当前连着的 c
 | Detach/Reattach | — | Client 断开后 Server 还在，新 Client 能连回来 |
 | 多 Session/Client | — | 多 session 各自独立，`Ctrl+C` 不跨 session |
 
-Bonus（多 Pane、Layout、Log、Pipeout、Capture）见 handout 3.4-3.9。
-
----
+Bonus（多 Pane、Layout、SIGWINCH、Log、Pipeout、Capture）见 handout 3.4-3.5、3.9。
 
 ## 接下来
 
