@@ -1,3 +1,4 @@
 mini-tmux
 *.o
 *.dSYM/
+harness/__pycache__/
