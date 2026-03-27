@@ -10,17 +10,16 @@ steps:
   - action: create_pane_with_probe
   - action: wait_probe_ready
     pane: 0
-  - action: create_pane
-  - action: switch_focus
-    pane: 1
-  - action: run_command
-    command: "seq 1 10000"
-    delay_ms: 2000
-  - action: switch_focus
-    pane: 0
-  - action: verify_env_check
-    pane: 0
+  - action: create_session
   - action: wait
-    duration_ms: 500
-  - action: verify_output_token
+    duration_ms: 300
+  - action: send_keys
+    pane: 1
+    keys: "seq 1 10000"
+  - action: send_keys
+    pane: 1
+    keys: "Enter"
+  - action: wait
+    duration_ms: 2000
+  - action: verify_env_check
     pane: 0

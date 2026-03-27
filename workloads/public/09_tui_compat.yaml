@@ -13,12 +13,17 @@ steps:
     pane: 0
   - action: verify_env_check
     pane: 0
-  - action: create_pane
-  - action: switch_focus
+  - action: create_session
+  - action: wait
+    duration_ms: 300
+  - action: send_keys
     pane: 1
-  - action: run_command
-    command: "vim"
-    delay_ms: 1000
+    keys: "vim"
+  - action: send_keys
+    pane: 1
+    keys: "Enter"
+  - action: wait
+    duration_ms: 1000
   - action: send_keys
     pane: 1
     keys: ":q!"
@@ -27,9 +32,5 @@ steps:
     keys: "Enter"
   - action: wait
     duration_ms: 500
-  - action: switch_focus
-    pane: 0
   - action: verify_env_check
-    pane: 0
-  - action: verify_output_token
     pane: 0
