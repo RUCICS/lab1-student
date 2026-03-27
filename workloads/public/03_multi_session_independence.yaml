@@ -1,6 +1,6 @@
-name: "4 panes with focus switch + IO verification"
-id: t_4pane_focus
-category: pane_management
+name: "4 sessions with independent IO verification"
+id: t_4session_independence
+category: session_management
 timeout_sec: 30
 terminal:
   rows: 24
@@ -8,9 +8,9 @@ terminal:
 steps:
   - action: start
   - action: create_pane_with_probe
-  - action: create_pane_with_probe
-  - action: create_pane_with_probe
-  - action: create_pane_with_probe
+  - action: create_session_with_probe
+  - action: create_session_with_probe
+  - action: create_session_with_probe
   - action: wait_probe_ready
     pane: 0
   - action: wait_probe_ready
@@ -29,8 +29,6 @@ steps:
     pane: 3
   - action: verify_pgrp_isolation
     panes: [0, 1, 2, 3]
-  - action: switch_focus
-    pane: 2
   - action: send_keys
     pane: 2
     keys: "C-c"
