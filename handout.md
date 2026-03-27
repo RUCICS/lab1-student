@@ -629,7 +629,7 @@ Probe 通过侧信道报告的信息包括：
 | 单 Pane | PTY 创建、基础 IO、TUI 兼容 | 01, 05, 09, 10 |
 | Client-Server | Unix socket 通信、C/S 拆分 | 相关测试 |
 | Detach/Reattach | Server 持久化、Client 重连 | 13, 14, 21 |
-| 多 Session / 多 Client | 信号隔离、僵尸回收、多 client 各连不同 session | 18, 19 + 改编后的 02, 03, 04, 06, 08, 11, 12 |
+| 多 Session / 多 Client | 信号隔离、僵尸回收、多 client 各连不同 session | 02, 03, 04, 06, 08, 11, 12, 18, 19 |
 
 四阶段内所有测试用例等权，得分 = 总通过率 x 50。建议按阶段顺序实现。
 
