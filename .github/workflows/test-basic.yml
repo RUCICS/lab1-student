@@ -11,24 +11,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check source file exists
+        id: check
+        run: |
+          if [ ! -f mini_tmux.cpp ]; then
+            echo "::notice::mini_tmux.cpp not found — create this file to start the lab."
+            echo "## Basic Test Results" >> "$GITHUB_STEP_SUMMARY"
+            echo "**mini_tmux.cpp not found.** Create this file and push to run tests." >> "$GITHUB_STEP_SUMMARY"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install system dependencies
+        if: steps.check.outputs.skip != 'true'
         run: sudo apt-get update && sudo apt-get install -y build-essential
 
       - name: Build student binary
+        if: steps.check.outputs.skip != 'true'
         run: make
 
       - name: Build harness helpers
+        if: steps.check.outputs.skip != 'true'
         run: make -C harness/helpers
 
       - name: Set up Python
+        if: steps.check.outputs.skip != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install harness dependencies
+        if: steps.check.outputs.skip != 'true'
         run: pip install pexpect pyyaml psutil
 
       - name: Run basic public tests
+        if: steps.check.outputs.skip != 'true'
         run: |
           python harness/run_tests.py \
             --binary "${{ github.workspace }}/mini-tmux" \
@@ -36,7 +52,7 @@ jobs:
             --report "${{ github.workspace }}/report.json"
 
       - name: Show results
-        if: always()
+        if: always() && steps.check.outputs.skip != 'true'
         run: |
           if [ ! -f report.json ]; then
             echo "No report.json found." >> "$GITHUB_STEP_SUMMARY"
@@ -73,7 +89,7 @@ jobs:
           PYEOF
 
       - name: Upload report
-        if: always()
+        if: always() && steps.check.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: test-report
