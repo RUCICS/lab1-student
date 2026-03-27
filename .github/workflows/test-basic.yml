@@ -14,8 +14,11 @@ jobs:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential
 
-      - name: Build
+      - name: Build student binary
         run: make
+
+      - name: Build harness helpers
+        run: make -C harness/helpers
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -25,49 +28,14 @@ jobs:
       - name: Install harness dependencies
         run: pip install pexpect pyyaml psutil
 
-      - name: Fetch harness
-        uses: actions/checkout@v4
-        with:
-          repository: RUCICS/lab1
-          token: ${{ secrets.HARNESS_PAT }}
-          path: _harness
-          sparse-checkout: |
-            harness
-            scripts
-
-      - name: Stage basic tests only
-        run: |
-          mkdir -p _basic_workloads
-          for f in \
-            01_single_pane_basic.yaml \
-            02_two_session_signal_isolation.yaml \
-            03_multi_session_independence.yaml \
-            04_session_create_destroy.yaml \
-            05_high_freq_output.yaml \
-            06_zombie_reap.yaml \
-            08_multi_session_stress.yaml \
-            09_tui_compat.yaml \
-            10_concurrent_output.yaml \
-            11_sigtstp_sigcont.yaml \
-            12_rapid_session_ops.yaml \
-            13_detach_reattach_basic.yaml \
-            14_detach_probe_survives.yaml \
-            18_multi_client_basic.yaml \
-            19_multi_client_readonly.yaml \
-            21_last_pane_exit.yaml \
-          ; do
-            cp "workloads/public/$f" _basic_workloads/
-          done
-
       - name: Run basic public tests
         run: |
-          cd _harness
-          python scripts/run_public.py \
+          python harness/run_tests.py \
             --binary "${{ github.workspace }}/mini-tmux" \
-            --workloads "${{ github.workspace }}/_basic_workloads" \
+            --workloads "${{ github.workspace }}/workloads/public" \
             --report "${{ github.workspace }}/report.json"
 
-      - name: Show score summary
+      - name: Show results
         if: always()
         run: |
           if [ ! -f report.json ]; then
@@ -87,7 +55,6 @@ jobs:
           passed = report.get("pass_count", 0)
           lines.append(f"**Passed {passed}/{total} tests**\n")
 
-          # Per-workload table
           lines.append("| Test | Status |")
           lines.append("|------|--------|")
           for w in report.get("workloads", []):
