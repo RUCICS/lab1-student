@@ -26,7 +26,7 @@ steps:
   - action: reattach
   - action: wait
     duration_ms: 500
-  - action: verify_env_check
+  - action: verify_output_token
     pane: 0
-  - action: verify_env_check
+  - action: verify_input_token
     pane: 1

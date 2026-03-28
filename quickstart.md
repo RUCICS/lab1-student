@@ -344,10 +344,10 @@ Client 写完了？恭喜，整个 Lab 里最轻松的部分结束了。接下�
 ```
 Server 内部：
 
-  Client 0   Client 1   ...        Session 0        Session 1    ...
-  socket_fd  socket_fd             master_fd         master_fd
-      │          │                     │  ▲              │  ▲
-      ▼          ▼                     ▼  │              ▼  │
+  Client 0   Client 1   ...
+  socket_fd  socket_fd
+      │          │
+      ▼          ▼
   ┌──────────────────────────────────────────────────────────────┐
   │  Server 进程                                                 │
   │                                                              │
@@ -356,11 +356,12 @@ Server 内部：
   │  client_fd 有数据 → 写到对应 session 的 master_fd            │
   │  master_fd 有数据 → 推给 attach 到这个 session 的 client_fd  │
   │  listen_fd 有数据 → accept() 新 Client                      │
+  │                                                              │
+  │          Session 0                    Session 1              │
+  │   master_fd ···PTY··· slave_fd  master_fd ···PTY··· slave_fd│
+  │                          │                             │     │
+  │                         bash                          bash   │
   └──────────────────────────────────────────────────────────────┘
-                                       │  ▲              │  ▲
-                                       ▼  │              ▼  │
-                                   ···PTY···         ···PTY···
-                                      bash              bash
 ```
 
 ### 走一遍完整的数据流

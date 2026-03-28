@@ -23,3 +23,7 @@ steps:
     duration_ms: 2000
   - action: verify_env_check
     pane: 0
+  - action: wait
+    duration_ms: 500
+  - action: verify_output_token
+    pane: 0
