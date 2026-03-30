@@ -357,7 +357,7 @@ echo $TERM             # 通常是 screen 或 xterm-256color
 
 首次启动时自动创建 Pane 0。
 
-### 3.4 命令模式（Bonus: 多 Pane）
+### 3.4 命令模式
 
 先在 tmux 里试一下命令模式的手感。按 `Ctrl+B` 然后按 `:`，你会看到底部出现一个冒号提示符。输入 `split-window` 然后回车，屏幕被分成了上下两半。再按 `Ctrl+B` + `:`，输入 `kill-pane`，刚创建的 pane 被关掉了。
 
