@@ -582,7 +582,13 @@ Probe 通过侧信道报告的信息包括：
 
 ### 4.2 公开测试用例
 
-项目仓库中的 `workloads/public/` 目录包含所有公开测试用例的 YAML 描述文件。这些文件**只是测试点的声明式描述，不是可执行的测试脚本**，仓库中也不提供本地运行器。它们的价值在于让你精确了解每个测试用例在测什么、执行了哪些步骤，从而指导你的实现和自测。
+项目仓库中的 `workloads/public/` 目录包含所有公开测试用例的 YAML 描述文件，`harness/` 目录包含测试运行器。你可以在本地运行公开测试（需要 Linux x86_64 环境）：
+
+```bash
+python3 harness/run_tests.py workloads/public/
+```
+
+每次 push 也会自动触发 CI 运行基础层的公开测试。YAML 文件的价值在于让你精确了解每个测试用例在测什么、执行了哪些步骤，从而指导你的实现和自测。
 
 例如，`01_single_pane_basic.yaml` 描述了一个单 Pane 基础 I/O 测试：启动 mini-tmux，在 Pane 中启动 Probe，验证环境自检通过，验证输出和输入 token 能正确透传。
 
@@ -662,22 +668,21 @@ make clean      # 清理编译产物
 
 ### 4.5 测试策略
 
-我们不提供本地自动评测工具。你需要自己验证你的实现是否正确，这本身就是系统编程的重要能力。
+仓库内置了测试运行器（`harness/`）和公开测试用例（`workloads/public/`），你可以在本地运行：
 
-**手动验证**：前面各节已经给出了大量可以在 tmux 上动手验证的操作，你应该在自己的 mini-tmux 上逐一重复这些操作，确认行为与 tmux 一致。重点关注：
+```bash
+python3 harness/run_tests.py workloads/public/          # 运行全部公开测试
+python3 harness/run_tests.py workloads/public/01_*.yaml  # 运行单个测试
+```
+
+每次 push 也会通过 CI 自动运行基础层公开测试，结果在 GitHub Actions 页面查看。
+
+除了自动测试，手动验证同样重要：
 
 - `isatty()`、`tty`、`stty size` 是否正确（3.3 节）
 - 多 Session 下 `Ctrl+C` 是否只影响目标 Session 的进程（3.6 节）
 - Detach 后 `ps aux` 确认 Server 和 Pane 进程还在（3.7 节）
 - `/proc/<pid>/fd/` 检查 fd 数量在创建销毁 Pane 后是否回到初始值（3.10 节）
-
-**自动化测试**：你可以（也鼓励你）编写自己的测试脚本来自动化验证。一些方向：
-
-- 用 Python 的 `pexpect` 或 Tcl 的 `expect` 模拟键盘输入和屏幕输出匹配，自动驱动你的 mini-tmux
-- 写一个测试 client，直接通过 Unix domain socket 连接 Server，发送命令序列并验证响应
-- `workloads/public/` 中的 YAML 文件描述了评测的完整操作序列和验证点，你完全可以参照它们的逻辑来编写自己的测试脚本
-
-把你的测试脚本放进仓库。好的测试设计也是 Presentation 可以展示的内容。
 
 ### 4.6 提交方式
 
