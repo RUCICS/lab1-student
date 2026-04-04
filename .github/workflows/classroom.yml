@@ -15,3 +15,10 @@ jobs:
         run: |
           echo "::notice title=Autograding complete::Points ${{ github.event.client_payload.points }}/${{ github.event.client_payload.max }}"
           echo '::notice title=Autograding report::{"totalPoints":${{ github.event.client_payload.points }},"maxPoints":${{ github.event.client_payload.max }}}'
+      - name: Show detailed results
+        env:
+          REPORT: ${{ github.event.client_payload.summary }}
+        run: |
+          if [ -n "$REPORT" ]; then
+            echo "$REPORT" >> "$GITHUB_STEP_SUMMARY"
+          fi
