@@ -1,8 +1,9 @@
 name: Autograding
 
 on:
-  repository_dispatch:
-    types: [autograde]
+  push:
+    branches: [main]
+    paths: ['.grade/result.json']
 
 permissions:
   checks: write
@@ -12,16 +13,20 @@ permissions:
 jobs:
   report:
     runs-on: ubuntu-latest
+    if: github.actor == 'ics2-grader[bot]'
     steps:
-      - name: Build grader result
-        env:
-          POINTS: ${{ github.event.client_payload.points }}
-          MAX: ${{ github.event.client_payload.max }}
+      - uses: actions/checkout@v4
+
+      - name: Report score
         run: |
+          export POINTS=$(jq -r '.points' .grade/result.json)
+          export MAX=$(jq -r '.max' .grade/result.json)
+          SUMMARY_B64=$(jq -r '.summary // empty' .grade/result.json)
+
           RESULT=$(python3 -c "
           import json, base64, os
-          pts = int(os.environ.get('POINTS') or '0')
-          mx = int(os.environ.get('MAX') or '50')
+          pts = int(os.environ['POINTS'])
+          mx = int(os.environ['MAX'])
           r = {
             'version': 1,
             'status': 'pass' if pts == mx else 'fail',
@@ -42,17 +47,13 @@ jobs:
           ")
           echo "GRADE_RESULTS=$RESULT" >> "$GITHUB_ENV"
 
+          if [ -n "$SUMMARY_B64" ]; then
+            echo "$SUMMARY_B64" | base64 -d >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Autograding Reporter
         uses: classroom-resources/autograding-grading-reporter@v1
         env:
           GRADE_RESULTS: ${{ env.GRADE_RESULTS }}
         with:
           runners: grade
-
-      - name: Show detailed results
-        env:
-          REPORT: ${{ github.event.client_payload.summary }}
-        run: |
-          if [ -n "$REPORT" ]; then
-            echo "$REPORT" >> "$GITHUB_STEP_SUMMARY"
-          fi
