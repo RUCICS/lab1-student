@@ -653,7 +653,7 @@ python3 harness/run_tests.py workloads/public/
 
 #### 报告或 Presentation（50 分）
 
-二选一（见第 5 节），评价学习过程和 AI 协作质量，不要求代码完美。选择 Presentation 的同学可获得额外加分，**加分可补到代码得分上**。具体评分标准后续通知。
+二选一（见第 5 节），评价学习过程和 AI 协作质量，不要求代码完美。Presentation 包含现场问答，更容易展示理解深度。
 
 ### 4.4 开发工具
 
