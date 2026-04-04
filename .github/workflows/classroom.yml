@@ -6,15 +6,49 @@ on:
 
 permissions:
   checks: write
+  actions: read
+  contents: read
 
 jobs:
   report:
     runs-on: ubuntu-latest
     steps:
-      - name: Report score to Classroom
+      - name: Build grader result
+        env:
+          POINTS: ${{ github.event.client_payload.points }}
+          MAX: ${{ github.event.client_payload.max }}
         run: |
-          echo "::notice title=Autograding complete::Points ${{ github.event.client_payload.points }}/${{ github.event.client_payload.max }}"
-          echo '::notice title=Autograding report::{"totalPoints":${{ github.event.client_payload.points }},"maxPoints":${{ github.event.client_payload.max }}}'
+          RESULT=$(python3 -c "
+          import json, base64, os
+          pts = int(os.environ.get('POINTS') or '0')
+          mx = int(os.environ.get('MAX') or '50')
+          r = {
+            'version': 1,
+            'status': 'pass' if pts == mx else 'fail',
+            'max_score': mx,
+            'tests': [{
+              'name': 'Lab1 Autograding',
+              'status': 'pass' if pts == mx else 'fail',
+              'score': pts,
+              'max_score': mx,
+              'message': f'{pts}/{mx}',
+              'test_code': '',
+              'filename': '',
+              'line_no': 0,
+              'duration': 0
+            }]
+          }
+          print(base64.b64encode(json.dumps(r).encode()).decode())
+          ")
+          echo "GRADE_RESULTS=$RESULT" >> "$GITHUB_ENV"
+
+      - name: Autograding Reporter
+        uses: classroom-resources/autograding-grading-reporter@v1
+        env:
+          GRADE_RESULTS: ${{ env.GRADE_RESULTS }}
+        with:
+          runners: grade
+
       - name: Show detailed results
         env:
           REPORT: ${{ github.event.client_payload.summary }}
