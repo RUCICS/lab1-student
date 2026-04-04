@@ -99,13 +99,41 @@ class Verifier:
         return Result(True, f"{signal} isolation OK: {active} got it, {inactive} did not")
 
     def verify_output_token(self, session_id: str) -> Result:
-        msgs = self._sb.get_messages(session_id=session_id, msg_type="output_token")
-        if not msgs:
-            return Result(False, f"No output_token from {session_id}")
-        token = msgs[0]["token"]
-        raw = self._driver.read_raw(timeout=2.0)
-        if token.encode() in raw:
-            return Result(True, "output_token passthrough OK", data={"token": token})
+        """Verify that probe's output token appeared in client byte stream.
+
+        Uses a retry loop to handle high-throughput scenarios where the token
+        may not appear in the first read_raw chunk.
+        """
+        import time as _time
+        old_count = len(self._sb.get_messages(
+            session_id=session_id, msg_type="output_token"))
+        deadline = _time.monotonic() + 3.0
+        new_msgs = []
+        while _time.monotonic() < deadline:
+            new_msgs = self._sb.get_messages(
+                session_id=session_id, msg_type="output_token")[old_count:]
+            if new_msgs:
+                break
+            _time.sleep(0.2)
+
+        if not new_msgs:
+            all_msgs = self._sb.get_messages(
+                session_id=session_id, msg_type="output_token")
+            if not all_msgs:
+                return Result(False, f"No output_token from {session_id}")
+            new_msgs = [all_msgs[-1]]
+
+        raw = b""
+        read_deadline = _time.monotonic() + 5.0
+        while _time.monotonic() < read_deadline:
+            raw += self._driver.read_raw(timeout=1.0)
+            for m in reversed(new_msgs):
+                if m["token"].encode() in raw:
+                    return Result(True, "output_token passthrough OK",
+                                 data={"token": m["token"]})
+            _time.sleep(0.1)
+
+        token = new_msgs[-1]["token"]
         return Result(
             False,
             f"Token {token} not found in client output ({len(raw)} bytes read)",
