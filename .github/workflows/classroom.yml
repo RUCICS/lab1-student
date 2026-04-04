@@ -19,41 +19,13 @@ jobs:
 
       - name: Report score
         run: |
-          export POINTS=$(jq -r '.points' .grade/result.json)
-          export MAX=$(jq -r '.max' .grade/result.json)
+          POINTS=$(jq -r '.points' .grade/result.json)
+          MAX=$(jq -r '.max' .grade/result.json)
           SUMMARY_B64=$(jq -r '.summary // empty' .grade/result.json)
 
-          RESULT=$(python3 -c "
-          import json, base64, os
-          pts = int(os.environ['POINTS'])
-          mx = int(os.environ['MAX'])
-          r = {
-            'version': 1,
-            'status': 'pass' if pts == mx else 'fail',
-            'max_score': mx,
-            'tests': [{
-              'name': 'Lab1 Autograding',
-              'status': 'pass' if pts == mx else 'fail',
-              'score': pts,
-              'max_score': mx,
-              'message': f'{pts}/{mx}',
-              'test_code': '',
-              'filename': '',
-              'line_no': 0,
-              'duration': 0
-            }]
-          }
-          print(base64.b64encode(json.dumps(r).encode()).decode())
-          ")
-          echo "GRADE_RESULTS=$RESULT" >> "$GITHUB_ENV"
+          echo "::notice title=Autograding complete::Points ${POINTS}/${MAX}"
+          echo "::notice title=Autograding report::{\"totalPoints\":${POINTS},\"maxPoints\":${MAX}}"
 
           if [ -n "$SUMMARY_B64" ]; then
             echo "$SUMMARY_B64" | base64 -d >> "$GITHUB_STEP_SUMMARY"
           fi
-
-      - name: Autograding Reporter
-        uses: classroom-resources/autograding-grading-reporter@v1
-        env:
-          GRADE_RESULTS: ${{ env.GRADE_RESULTS }}
-        with:
-          runners: grade
