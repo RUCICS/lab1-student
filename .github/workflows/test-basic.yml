@@ -3,6 +3,7 @@ name: Basic Tests
 on:
   push:
     branches: [main]
+    paths-ignore: ['.grade/**']
 
 jobs:
   test:
